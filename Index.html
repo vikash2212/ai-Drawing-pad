@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Drawing Pad</title>
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      background: #f4f4f4;
+    }
+    header {
+      background: #222;
+      color: #fff;
+      text-align: center;
+      padding: 12px;
+      cursor: pointer;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px;
+      background: #fff;
+      border-bottom: 1px solid #ccc;
+      align-items: center;
+    }
+    canvas {
+      display: block;
+      margin: 10px auto;
+      border: 2px solid #333;
+      background: #fff;
+    }
+    input, button {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    #status {
+      text-align: center;
+      padding: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<header onclick="setProjectName()">
+  <h2>AI Drawing Pad</h2>
+</header>
+
+<div class="toolbar">
+  Width: <input type="number" id="width" value="512" style="width:60px">
+  Height: <input type="number" id="height" value="512" style="width:60px">
+  <button onclick="createCanvas()">Resize</button>
+
+  <input type="color" id="colorPicker" value="#e74c3c">
+  Thickness: <input type="range" id="thickness" min="1" max="30" value="5">
+
+  <button onclick="useEraser()">Eraser</button>
+  <button onclick="clearCanvas()">New</button>
+  <button onclick="saveCanvas()">Save</button>
+
+  <input type="text" id="projectName" placeholder="Project name..." />
+  <input type="text" id="prompt" placeholder="Draw a cat, forest..." style="flex:1">
+  <button onclick="drawWithAI()">Text to Draw</button>
+</div>
+
+<div id="status"></div>
+<canvas id="drawCanvas" width="512" height="512"></canvas>
+
+<script>
+let canvas = document.getElementById("drawCanvas");
+let ctx = canvas.getContext("2d");
+let painting = false;
+
+function createCanvas() {
+  const w = parseInt(document.getElementById("width").value);
+  const h = parseInt(document.getElementById("height").value);
+  canvas.width = w;
+  canvas.height = h;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+}
+
+canvas.addEventListener("mousedown", () => { painting = true; draw(event); });
+canvas.addEventListener("mouseup", () => {
+  painting = false;
+  ctx.beginPath();
+});
+canvas.addEventListener("mousemove", draw);
+
+function draw(e) {
+  if (!painting) return;
+  ctx.lineWidth = document.getElementById("thickness").value;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = document.getElementById("colorPicker").value;
+  ctx.lineTo(e.offsetX, e.offsetY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(e.offsetX, e.offsetY);
+}
+
+function useEraser() {
+  document.getElementById("colorPicker").value = "#ffffff";
+}
+
+function clearCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function saveCanvas() {
+  const name = document.getElementById("projectName").value || "drawing";
+  const link = document.createElement('a');
+  link.download = name + ".png";
+  link.href = canvas.toDataURL();
+  link.click();
+}
+
+function setProjectName() {
+  const name = prompt("Enter your project name:");
+  if (name) {
+    document.getElementById("projectName").value = name;
+  }
+}
+
+async function drawWithAI() {
+  const prompt = document.getElementById("prompt").value;
+  const status = document.getElementById("status");
+  if (!prompt) return alert("Please enter a prompt!");
+
+  status.textContent = "Generating image, please wait...";
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer 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"
+      },
+      body: JSON.stringify({
+        model: "image-alpha-001",
+        prompt: prompt,
+        n: 1,
+        size: "512x512"
+      })
+    });
+
+    const data = await response.json();
+    if (!data?.data?.[0]?.url) {
+      status.textContent = "Error: Image generation failed.";
+      console.log(data);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      status.textContent = "Image added to canvas!";
+    };
+    img.onerror = () => {
+      status.textContent = "Error loading image.";
+    };
+    img.src = data.data[0].url;
+
+  } catch (err) {
+    status.textContent = "API Error: " + err.message;
+  }
+}
+
+// Start with blank canvas
+createCanvas();
+</script>
+
+</body>
+</html>
